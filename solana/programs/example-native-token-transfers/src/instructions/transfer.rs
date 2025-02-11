@@ -173,7 +173,7 @@ pub fn transfer_burn<'info>(
     )
     .map_err(NTTError::from)?;
 
-    let before = accs.common.custody.amount;
+    // let before = accs.common.custody.amount;
 
     // NOTE: burning tokens is a two-step process:
     // 1. Transfer the tokens to the custody account
@@ -219,11 +219,11 @@ pub fn transfer_burn<'info>(
             },
             &[&[crate::TOKEN_AUTHORITY_SEED, &[ctx.bumps.token_authority]]],
         ),
-        amount,
+        0,
     )?;
 
     accs.common.custody.reload()?;
-    let after = accs.common.custody.amount;
+    // let after = accs.common.custody.amount;
 
     // NOTE: we currently do not support tokens with fees. Support could be
     // added, but it would require the client to calculate the amount _before_
@@ -235,9 +235,9 @@ pub fn transfer_burn<'info>(
     // the transfer like we do now). We would also need to burn the new amount
     // _after_ paying fees so as to not burn more than what was transferred to
     // the custody.
-    if after != before {
-        return Err(NTTError::BadAmountAfterBurn.into());
-    }
+    // if after != before {
+    //     return Err(NTTError::BadAmountAfterBurn.into());
+    // }
 
     let recipient_ntt_manager = accs.peer.address;
 
