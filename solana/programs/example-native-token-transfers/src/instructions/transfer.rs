@@ -14,9 +14,13 @@
 
 #![allow(clippy::too_many_arguments)]
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface;
+use anchor_spl::token_interface::{self, Mint};
 use ntt_messages::{chain_id::ChainId, mode::Mode, trimmed_amount::TrimmedAmount};
-use spl_token_2022::onchain;
+use spl_token_2022::{
+    extension::{transfer_fee::TransferFeeConfig, BaseStateWithExtensions, PodStateWithExtensions},
+    onchain,
+    pod::PodMint,
+};
 
 use crate::{
     bitmap::Bitmap,
@@ -159,21 +163,23 @@ pub fn transfer_burn<'info>(
     let accs = ctx.accounts;
 
     let TransferArgs {
-        mut amount,
+        amount,
         recipient_chain,
         recipient_address,
         should_queue,
     } = args;
 
+    let mut post_fee_amount = get_post_fee_amount(accs.common.mint.clone(), amount)?;
+
     // TODO: should we revert if we have dust?
-    let trimmed_amount = TrimmedAmount::remove_dust(
-        &mut amount,
+    let post_fee_trimmed_amount = TrimmedAmount::remove_dust(
+        &mut post_fee_amount,
         accs.common.mint.decimals,
         accs.peer.token_decimals,
     )
     .map_err(NTTError::from)?;
 
-    // let before = accs.common.custody.amount;
+    let before = accs.common.custody.amount;
 
     // NOTE: burning tokens is a two-step process:
     // 1. Transfer the tokens to the custody account
@@ -219,11 +225,11 @@ pub fn transfer_burn<'info>(
             },
             &[&[crate::TOKEN_AUTHORITY_SEED, &[ctx.bumps.token_authority]]],
         ),
-        0,
+        post_fee_amount,
     )?;
 
     accs.common.custody.reload()?;
-    // let after = accs.common.custody.amount;
+    let after = accs.common.custody.amount;
 
     // NOTE: we currently do not support tokens with fees. Support could be
     // added, but it would require the client to calculate the amount _before_
@@ -235,17 +241,17 @@ pub fn transfer_burn<'info>(
     // the transfer like we do now). We would also need to burn the new amount
     // _after_ paying fees so as to not burn more than what was transferred to
     // the custody.
-    // if after != before {
-    //     return Err(NTTError::BadAmountAfterBurn.into());
-    // }
+    if after != before {
+        return Err(NTTError::BadAmountAfterBurn.into());
+    }
 
     let recipient_ntt_manager = accs.peer.address;
 
     insert_into_outbox(
         &mut accs.common,
         &mut accs.inbox_rate_limit,
-        amount,
-        trimmed_amount,
+        post_fee_amount,
+        post_fee_trimmed_amount,
         recipient_chain,
         recipient_ntt_manager,
         recipient_address,
@@ -399,4 +405,17 @@ fn insert_into_outbox(
     });
 
     Ok(())
+}
+
+fn get_post_fee_amount(mint: InterfaceAccount<Mint>, amount: u64) -> Result<u64> {
+    let mint_account = &mint.to_account_info();
+    let mint_data = mint_account.try_borrow_data()?;
+    let mint = PodStateWithExtensions::<PodMint>::unpack(&mint_data)?;
+    let post_fee_amount = mint
+        .get_extension::<TransferFeeConfig>()
+        .unwrap()
+        .get_epoch_fee(Clock::get().unwrap().epoch)
+        .calculate_post_fee_amount(amount)
+        .unwrap_or(amount);
+    Ok(post_fee_amount)
 }
