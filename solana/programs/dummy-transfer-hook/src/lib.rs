@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 use spl_tlv_account_resolution::state::ExtraAccountMetaList;
 
-declare_id!("NtMKN2umrQc65WaDzNgxAww8rRn3q6rSpCnk2cwUA9k");
+declare_id!("BgabMDLaxsyB7eGMBt9L22MSk9KMrL4zY2iNe14kyFP5");
 
 /// Index of the sender token account in the accounts passed to the transfer hook
 pub const SENDER_TOKEN_ACCOUNT_INDEX: u8 = 0;
