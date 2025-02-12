@@ -170,6 +170,7 @@ pub fn transfer_burn<'info>(
     } = args;
 
     let mut post_fee_amount = get_post_fee_amount(accs.common.mint.clone(), amount)?;
+    let post_fee_amount_copy = post_fee_amount.clone();
 
     // TODO: should we revert if we have dust?
     let post_fee_trimmed_amount = TrimmedAmount::remove_dust(
@@ -225,7 +226,7 @@ pub fn transfer_burn<'info>(
             },
             &[&[crate::TOKEN_AUTHORITY_SEED, &[ctx.bumps.token_authority]]],
         ),
-        post_fee_amount,
+        post_fee_amount_copy,
     )?;
 
     accs.common.custody.reload()?;
